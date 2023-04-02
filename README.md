@@ -4,6 +4,12 @@ Taken the neural code from the blog:
 
 https://sausheong.github.io/posts/how-to-build-a-simple-artificial-neural-network-with-go/
 
+### Before it all
+
+Unzip the data set in the mnist_dataset.
+Inside the zip folder we have some samples of tests
+and you dont need to select the csv to make the code run, you can change the csv in the code.
+
 ### Run it:
 
 first you will need to clone the repo and enter the folder:
