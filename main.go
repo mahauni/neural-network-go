@@ -2,9 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/base64"
 	"encoding/csv"
 	"flag"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"math"
 	"math/rand"
@@ -25,6 +29,7 @@ func main() {
 	net := CreateNetwork(784, 200, 10, 0.1)
 
 	mnist := flag.String("mnist", "", "Either train or predict to evaluate neural network")
+	file := flag.String("file", "", "File name of 28 x 28 PNG file to evaluate")
 	flag.Parse()
 
 	// train or mass predict to determinate the effectiveness of the trained network
@@ -37,6 +42,17 @@ func main() {
 		mnistPredict(&net)
 	default:
 		// dont do anything
+	}
+
+	if *file != "" {
+		// print the image nicely in the terminal
+		printImage(getImage(*file))
+
+		// load neural network from file
+		load(&net)
+
+		// predict which number it is
+		fmt.Println("prediction:", predictFromImage(net, *file))
 	}
 }
 
@@ -279,4 +295,91 @@ func mnistPredict(net *Network) {
 	fmt.Printf("Time taken to check: %s\n", elapsed)
 	fmt.Println("score:", score)
 	fmt.Println("total:", total)
+}
+
+func dataFromImage(filePath string) (pixels []float64) {
+	// read the file
+	imgFile, err := os.Open(filePath)
+	defer imgFile.Close()
+	if err != nil {
+		fmt.Println("Cannot read the file:", err)
+	}
+	img, err := png.Decode(imgFile)
+	if err != nil {
+		fmt.Println("Cannot decode the file:", err)
+	}
+
+	// Create grayscale image
+	bounds := img.Bounds()
+	gray := image.NewGray(bounds)
+
+	for x := 0; x < bounds.Max.X; x++ {
+		for y := 0; y < bounds.Max.Y; y++ {
+			var rgba = img.At(x, y)
+			gray.Set(x, y, rgba)
+		}
+	}
+
+	// make pixel array
+	pixels = make([]float64, len(gray.Pix))
+
+	// populate the pixel array subtract the Pix from 255 because
+	// thats how the MNIST database was trained (in reverse)
+
+	for i := 0; i < len(gray.Pix); i++ {
+		pixels[i] = (float64(255-gray.Pix[i]) / 255.0 * 0.999) + 0.001
+	}
+	return
+}
+
+func predictFromImage(net Network, path string) int {
+	input := dataFromImage(path)
+	output := net.Predict(input)
+	matrixPrint(output)
+	best := 0
+	highest := 0.0
+	for i := 0; i < net.outputs; i++ {
+		if output.At(i, 0) > highest {
+			best = i
+			highest = output.At(i, 0)
+		}
+	}
+	return best
+}
+
+func matrixPrint(X mat.Matrix) {
+	fa := mat.Formatted(X, mat.Prefix(""), mat.Squeeze())
+	fmt.Printf("%v\n", fa)
+}
+
+func addBiasNodeTo(m mat.Matrix, b float64) mat.Matrix {
+	r, _ := m.Dims()
+	a := mat.NewDense(r+1, 1, nil)
+
+	a.Set(0, 0, b)
+	for i := 0; i < r; i++ {
+		a.Set(i+1, 0, m.At(i, 0))
+	}
+	return a
+}
+
+func printImage(img image.Image) {
+	var buf bytes.Buffer
+	png.Encode(&buf, img)
+	imgBase64Str := base64.StdEncoding.EncodeToString(buf.Bytes())
+	fmt.Printf("\x1b]1337;File=inline=1:%s\a\n", imgBase64Str)
+}
+
+// get the file as an image
+func getImage(filePath string) image.Image {
+	imgFile, err := os.Open(filePath)
+	defer imgFile.Close()
+	if err != nil {
+		fmt.Println("Cannot read the file:", err)
+	}
+	img, _, err := image.Decode(imgFile)
+	if err != nil {
+		fmt.Println("Cannot decode the image:", err)
+	}
+	return img
 }
